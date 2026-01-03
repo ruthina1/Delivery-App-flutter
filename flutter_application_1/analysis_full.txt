@@ -1,0 +1,55 @@
+Analyzing flutter_application_1...                              
+
+   info - Dangling library doc comment - lib\core\constants\constants.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\data\models\models.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\auth\auth.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\cart\cart.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\checkout\checkout.dart:1:1 - dangling_library_doc_comments
+   info - The import of '../../services/order_service.dart' is unnecessary because all of the used elements are also provided by the import of '../../services/services.dart' - lib\features\checkout\checkout_screen.dart:4:8 - unnecessary_import
+   info - Dangling library doc comment - lib\features\features.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\home\home.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\main\main.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\menu\menu.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\onboarding\onboarding.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\features\orders\orders.dart:1:1 - dangling_library_doc_comments
+   info - The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\features\orders\orders_screen.dart:2:8 - unnecessary_import
+   info - Dangling library doc comment - lib\features\product\product.dart:1:1 - dangling_library_doc_comments
+warning - Unused import: '../product/product_detail_screen.dart' - lib\features\profile\favorites_screen.dart:7:8 - unused_import
+   info - Dangling library doc comment - lib\features\profile\profile.dart:1:1 - dangling_library_doc_comments
+   info - The import of 'package:flutter/foundation.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' - lib\features\profile\profile_screen.dart:2:8 - unnecessary_import
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\features\profile\profile_screen.dart:311:25 - deprecated_member_use
+   info - Dangling library doc comment - lib\features\splash\splash.dart:1:1 - dangling_library_doc_comments
+   info - The import of 'services/order_service.dart' is unnecessary because all of the used elements are also provided by the import of 'services/services.dart' - lib\main.dart:7:8 - unnecessary_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\auth\login_screen.dart:53:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\main\main_screen.dart:93:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\onboarding\onboarding_screen.dart:164:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\orders\orders_screen.dart:154:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\orders\orders_screen.dart:170:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\orders\orders_screen.dart:208:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:149:67 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:194:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:386:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:434:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:444:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:467:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:490:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:491:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:521:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:601:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\product\product_detail_screen.dart:680:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:71:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:97:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:138:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:167:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:217:43 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\presentation\screens\profile\profile_screen.dart:233:25 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:272:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\screens\profile\profile_screen.dart:376:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\widgets\category_card.dart:26:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\widgets\category_card.dart:40:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\widgets\search_bar_widget.dart:31:35 - deprecated_member_use
+   info - Dangling library doc comment - lib\presentation\widgets\widgets.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\services\api\api_services.dart:1:1 - dangling_library_doc_comments
+   info - Dangling library doc comment - lib\services\services.dart:1:1 - dangling_library_doc_comments
+
+51 issues found. (ran in 25.5s)

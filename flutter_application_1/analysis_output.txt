@@ -1,0 +1,5 @@
+Analyzing checkout_screen.dart...                               
+
+   info - The import of '../../services/order_service.dart' is unnecessary because all of the used elements are also provided by the import of '../../services/services.dart' - lib\features\checkout\checkout_screen.dart:4:8 - unnecessary_import
+
+1 issue found. (ran in 1.9s)
