@@ -110,6 +110,7 @@ class _OrdersScreenState extends State<OrdersScreen>
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
                   controller: _tabController,
+                  physics: const AlwaysScrollableScrollPhysics(),
                   children: [
                     // Active Orders Tab
                     _activeOrders.isEmpty
@@ -117,6 +118,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                         : RefreshIndicator(
                             onRefresh: _loadOrders,
                             child: ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
                               padding: const EdgeInsets.all(AppSizes.paddingM),
                               itemCount: _activeOrders.length,
                               itemBuilder: (context, index) {
@@ -131,6 +133,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                         : RefreshIndicator(
                             onRefresh: _loadOrders,
                             child: ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
                               padding: const EdgeInsets.all(AppSizes.paddingM),
                               itemCount: _completedOrders.length,
                               itemBuilder: (context, index) {
@@ -186,10 +189,22 @@ class _OrdersScreenState extends State<OrdersScreen>
       ),
       child: Column(
         children: [
-          // Order Header
-          Padding(
-            padding: const EdgeInsets.all(AppSizes.paddingM),
-            child: Row(
+          // Order Header - Make it tappable to view details
+          InkWell(
+            onTap: () {
+              Navigator.pushNamed(
+                context,
+                '/order-detail',
+                arguments: order.id,
+              );
+            },
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(AppSizes.radiusL),
+              topRight: Radius.circular(AppSizes.radiusL),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSizes.paddingM),
+              child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -246,6 +261,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                   ],
                 ),
               ],
+            ),
             ),
           ),
 

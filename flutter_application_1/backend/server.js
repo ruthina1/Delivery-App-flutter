@@ -1,8 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
+const mysql = require('mysql2/promise');
 const bodyParser = require('body-parser');
-const path = require('path');
+const config = require('./config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,56 +13,79 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Database setup
-const dbPath = path.join(__dirname, 'favorites.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-  } else {
-    console.log('Connected to SQLite database');
-    // Create favorites table if it doesn't exist
-    db.run(`CREATE TABLE IF NOT EXISTS favorites (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userId TEXT NOT NULL DEFAULT 'default_user',
-      productId TEXT NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(userId, productId)
-    )`, (err) => {
-      if (err) {
-        console.error('Error creating table:', err.message);
-      } else {
-        console.log('Favorites table ready');
+// Create MySQL connection pool
+const pool = mysql.createPool(config.database);
+
+// Initialize database - create table if it doesn't exist
+async function initializeDatabase() {
+  try {
+    const connection = await pool.getConnection();
+    
+    // Create database if it doesn't exist
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ${config.database.database}`);
+    await connection.query(`USE ${config.database.database}`);
+    
+    // Check if favorites table exists and has foreign key constraint
+    const [tables] = await connection.query(`
+      SELECT TABLE_NAME 
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'favorites'
+    `, [config.database.database]);
+    
+    if (tables.length > 0) {
+      // Table exists, check for foreign key constraints
+      const [constraints] = await connection.query(`
+        SELECT CONSTRAINT_NAME 
+        FROM information_schema.KEY_COLUMN_USAGE 
+        WHERE TABLE_SCHEMA = ? 
+        AND TABLE_NAME = 'favorites' 
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+      `, [config.database.database]);
+      
+      // Remove foreign key constraints if they exist
+      for (const constraint of constraints) {
+        try {
+          await connection.query(`ALTER TABLE favorites DROP FOREIGN KEY ${constraint.CONSTRAINT_NAME}`);
+          console.log(`✅ Removed foreign key constraint: ${constraint.CONSTRAINT_NAME}`);
+        } catch (err) {
+          // Constraint might not exist, ignore
+        }
       }
-    });
+    }
+    
+    // Create or recreate favorites table without foreign key constraint
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS favorites (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId VARCHAR(255) NOT NULL DEFAULT 'default_user',
+        productId VARCHAR(255) NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_user_product (userId, productId),
+        INDEX idx_userId (userId),
+        INDEX idx_productId (productId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    
+    connection.release();
+    console.log('✅ MySQL database initialized successfully');
+    console.log(`📊 Database: ${config.database.database}`);
+  } catch (error) {
+    console.error('❌ Error initializing database:', error.message);
+    process.exit(1);
   }
-});
+}
 
-// Helper function to wrap database queries in promises
-const dbRun = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
-};
+// Initialize database on startup
+initializeDatabase();
 
-const dbGet = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
-};
-
-const dbAll = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+// Helper functions for database queries
+const dbQuery = async (sql, params = []) => {
+  try {
+    const [results] = await pool.execute(sql, params);
+    return results;
+  } catch (error) {
+    throw error;
+  }
 };
 
 // Routes
@@ -70,7 +94,7 @@ const dbAll = (sql, params = []) => {
 app.get('/api/v1/favorites', async (req, res) => {
   try {
     const userId = req.query.userId || 'default_user';
-    const favorites = await dbAll(
+    const favorites = await dbQuery(
       'SELECT productId FROM favorites WHERE userId = ?',
       [userId]
     );
@@ -102,7 +126,7 @@ app.post('/api/v1/favorites', async (req, res) => {
     }
     
     try {
-      await dbRun(
+      await dbQuery(
         'INSERT INTO favorites (userId, productId) VALUES (?, ?)',
         [userId, productId]
       );
@@ -115,7 +139,8 @@ app.post('/api/v1/favorites', async (req, res) => {
         }
       });
     } catch (err) {
-      if (err.message.includes('UNIQUE constraint')) {
+      // MySQL error code 1062 is duplicate entry
+      if (err.code === 'ER_DUP_ENTRY' || err.errno === 1062) {
         // Already favorited, return success
         res.json({
           data: {
@@ -143,12 +168,12 @@ app.delete('/api/v1/favorites/:productId', async (req, res) => {
     const { productId } = req.params;
     const userId = req.query.userId || 'default_user';
     
-    const result = await dbRun(
+    const result = await dbQuery(
       'DELETE FROM favorites WHERE userId = ? AND productId = ?',
       [userId, productId]
     );
     
-    if (result.changes === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({
         message: 'Favorite not found'
       });
@@ -171,24 +196,34 @@ app.delete('/api/v1/favorites/:productId', async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Favorites API is running' });
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    await dbQuery('SELECT 1');
+    res.json({ 
+      status: 'ok', 
+      message: 'Favorites API is running',
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Database connection failed',
+      error: error.message
+    });
+  }
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Favorites API server running on http://localhost:${PORT}`);
-  console.log(`📊 Database: ${dbPath}`);
+  console.log(`🔌 MySQL Host: ${config.database.host}:${config.database.port}`);
 });
 
 // Graceful shutdown
-process.on('SIGINT', () => {
-  db.close((err) => {
-    if (err) {
-      console.error(err.message);
-    }
-    console.log('Database connection closed');
-    process.exit(0);
-  });
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down server...');
+  await pool.end();
+  console.log('✅ Database connections closed');
+  process.exit(0);
 });
-

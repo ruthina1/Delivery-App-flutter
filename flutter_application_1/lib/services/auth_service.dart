@@ -159,6 +159,8 @@ class AuthService extends ChangeNotifier {
     } catch (e) {
       // API failed, use local fallback for development
       debugPrint('API signin failed, using local fallback: $e');
+      // Ensure local users are loaded before attempting signin
+      await _loadLocalUsers();
       return await _localSignIn(email: email, password: password);
     }
   }
@@ -344,7 +346,22 @@ class AuthService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenPrefsKey, token);
-      await prefs.setString(_userPrefsKey, userData.toString());
+      // Save user data as JSON string, not toString()
+      if (userData is Map<String, dynamic>) {
+        await prefs.setString(_userPrefsKey, jsonEncode(userData));
+      } else if (userData is UserModel) {
+        await prefs.setString(_userPrefsKey, jsonEncode({
+          'id': userData.id,
+          'name': userData.name,
+          'email': userData.email,
+          'phone': userData.phone,
+          'avatarUrl': userData.avatarUrl,
+          'favoriteProductIds': userData.favoriteProductIds,
+        }));
+      } else {
+        // Fallback: try to convert to map
+        await prefs.setString(_userPrefsKey, jsonEncode(userData));
+      }
       _apiClient.setAuthToken(token);
     } catch (e) {
       debugPrint('Error saving session: $e');

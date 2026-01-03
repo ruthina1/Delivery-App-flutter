@@ -116,6 +116,7 @@ class BurgerKnightApp extends StatelessWidget {
             return _createRoute(OrderDetailScreen(orderId: orderId));
           case '/order-track':
             final orderId = settings.arguments as String;
+            debugPrint('🔵 [Main] Route /order-track - OrderId: $orderId');
             return _createRoute(OrderTrackingScreen(orderId: orderId));
           case '/notifications':
             return _createRoute(const NotificationsScreen());

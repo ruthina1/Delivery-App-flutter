@@ -5,6 +5,10 @@ node_modules/
 *.db
 *.db-journal
 
+# Environment variables
+.env
+.env.local
+
 # Logs
 *.log
 npm-debug.log*

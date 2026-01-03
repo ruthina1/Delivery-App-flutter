@@ -243,12 +243,22 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
-                      // Close dialog and navigate
+                      debugPrint('🔵 [Checkout] Track Order button clicked - OrderId: ${order.id}');
+                      // Close dialog first
                       Navigator.of(dialogContext, rootNavigator: true).pop();
-                      Navigator.of(context, rootNavigator: true).pushNamed(
-                        '/order-track',
-                        arguments: order.id,
-                      );
+                      debugPrint('✅ [Checkout] Dialog closed');
+                      // Wait a frame for dialog to fully close, then navigate
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        debugPrint('🔵 [Checkout] Navigating to order tracking...');
+                        Navigator.of(context, rootNavigator: true).pushNamed(
+                          '/order-track',
+                          arguments: order.id,
+                        ).then((_) {
+                          debugPrint('✅ [Checkout] Navigation to order tracking completed');
+                        }).catchError((error) {
+                          debugPrint('❌ [Checkout] Navigation error: $error');
+                        });
+                      });
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,

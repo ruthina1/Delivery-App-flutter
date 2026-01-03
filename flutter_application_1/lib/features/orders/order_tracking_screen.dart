@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/constants/constants.dart';
 import '../../data/models/models.dart';
@@ -18,75 +19,148 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   OrderModel? _order;
   bool _isLoading = true;
   String? _errorMessage;
-  bool _isPolling = false;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('🔵 [OrderTracking] initState - OrderId: ${widget.orderId}');
     _orderService.addListener(_onOrderChanged);
+    debugPrint('🔵 [OrderTracking] Starting to load order...');
     _loadOrder();
-    _startPolling();
+    // Don't start polling until order is loaded
   }
 
   @override
   void dispose() {
-    _isPolling = false;
+    debugPrint('🔴 [OrderTracking] dispose - Cleaning up');
+    _pollingTimer?.cancel();
     _orderService.removeListener(_onOrderChanged);
     super.dispose();
   }
 
   void _onOrderChanged() {
+    debugPrint('🟡 [OrderTracking] _onOrderChanged - Order service notified');
     if (mounted) {
       _loadOrder();
+    } else {
+      debugPrint('⚠️ [OrderTracking] _onOrderChanged - Widget not mounted, skipping');
     }
   }
 
   Future<void> _loadOrder() async {
-    if (!mounted) return;
+    debugPrint('📥 [OrderTracking] _loadOrder START - OrderId: ${widget.orderId}, mounted: $mounted');
+    if (!mounted) {
+      debugPrint('⚠️ [OrderTracking] _loadOrder - Widget not mounted, aborting');
+      return;
+    }
     
     try {
+      debugPrint('📥 [OrderTracking] Initializing order service...');
       await _orderService.initialize();
+      debugPrint('✅ [OrderTracking] Order service initialized');
+      
+      debugPrint('📥 [OrderTracking] Fetching order by ID: ${widget.orderId}');
       final order = await _orderService.getOrderById(widget.orderId);
+      debugPrint('✅ [OrderTracking] Order fetched successfully - OrderNumber: ${order.orderNumber}, Status: ${order.status}');
+      
       if (mounted) {
+        debugPrint('📥 [OrderTracking] Setting state with order data');
         setState(() {
           _order = order;
           _isLoading = false;
           _errorMessage = null;
         });
+        debugPrint('✅ [OrderTracking] State updated successfully');
+        
+        // Start polling after order is loaded
+        if (_order != null) {
+          debugPrint('📥 [OrderTracking] Starting polling for order status: ${_order!.status}');
+          _startPolling();
+        }
+        
+        // Stop polling if order is completed
+        if (order.status == OrderStatus.delivered || order.status == OrderStatus.cancelled) {
+          debugPrint('🛑 [OrderTracking] Order completed, stopping polling');
+          _stopPolling();
+        }
+      } else {
+        debugPrint('⚠️ [OrderTracking] Widget unmounted during load, cannot set state');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ [OrderTracking] ERROR loading order: $e');
+      debugPrint('❌ [OrderTracking] Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
-          _errorMessage = e is ApiException ? e.message : 'Failed to load order';
+          _errorMessage = e is ApiException ? e.message : 'Failed to load order: ${e.toString()}';
           _isLoading = false;
         });
+        debugPrint('⚠️ [OrderTracking] Error state set: $_errorMessage');
       }
     }
+    debugPrint('📥 [OrderTracking] _loadOrder END');
   }
 
   void _startPolling() {
-    // Poll for order updates every 5 seconds if order is active
-    _isPolling = true;
-    Future.delayed(const Duration(seconds: 5), () {
-      if (_isPolling && mounted) {
-        if (_order != null) {
-          final status = _order!.status;
-          if (status != OrderStatus.delivered && status != OrderStatus.cancelled) {
-            _loadOrder();
-            _startPolling(); // Continue polling
-          }
-        } else {
-          // If order is null, try loading it again
-          _loadOrder();
-          _startPolling();
-        }
+    debugPrint('🔄 [OrderTracking] _startPolling START');
+    // Cancel any existing timer
+    _stopPolling();
+    
+    // Only poll if order is active
+    if (_order != null) {
+      final status = _order!.status;
+      debugPrint('🔄 [OrderTracking] Current order status: $status');
+      if (status == OrderStatus.delivered || status == OrderStatus.cancelled) {
+        debugPrint('🛑 [OrderTracking] Order completed, not starting polling');
+        return; // Don't poll for completed orders
       }
+    } else {
+      debugPrint('⚠️ [OrderTracking] Order is null, cannot start polling');
+      return;
+    }
+    
+    debugPrint('🔄 [OrderTracking] Starting polling timer (5 second interval)');
+    // Poll for order updates every 5 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      debugPrint('🔄 [OrderTracking] Polling tick - mounted: $mounted');
+      if (!mounted) {
+        debugPrint('⚠️ [OrderTracking] Widget not mounted, canceling timer');
+        timer.cancel();
+        return;
+      }
+      
+      if (_order != null) {
+        final status = _order!.status;
+        debugPrint('🔄 [OrderTracking] Current status in polling: $status');
+        if (status == OrderStatus.delivered || status == OrderStatus.cancelled) {
+          debugPrint('🛑 [OrderTracking] Order completed, stopping polling');
+          timer.cancel();
+          return;
+        }
+      } else {
+        debugPrint('⚠️ [OrderTracking] Order is null in polling, canceling');
+        timer.cancel();
+        return;
+      }
+      
+      debugPrint('🔄 [OrderTracking] Polling - Reloading order...');
+      _loadOrder();
     });
+    debugPrint('✅ [OrderTracking] Polling timer started');
+  }
+
+  void _stopPolling() {
+    debugPrint('🛑 [OrderTracking] _stopPolling - Timer active: ${_pollingTimer != null}');
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    debugPrint('✅ [OrderTracking] Polling stopped');
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🎨 [OrderTracking] build() called - isLoading: $_isLoading, hasOrder: ${_order != null}, error: $_errorMessage');
     if (_isLoading) {
+      debugPrint('⏳ [OrderTracking] Showing loading screen');
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(

@@ -1,4 +1,4 @@
-# Quick Setup Guide
+# Quick Setup Guide - MySQL Version
 
 ## Step 1: Install Node.js
 
@@ -10,23 +10,118 @@ node --version
 npm --version
 ```
 
-## Step 2: Install Dependencies
+## Step 2: Install MySQL
 
-Navigate to the backend folder and install:
+If you don't have MySQL installed:
+
+**Windows:**
+- Download from: https://dev.mysql.com/downloads/mysql/
+- Or use XAMPP/WAMP which includes MySQL
+
+**macOS:**
+```bash
+brew install mysql
+brew services start mysql
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt-get update
+sudo apt-get install mysql-server
+sudo systemctl start mysql
+sudo systemctl enable mysql
+```
+
+## Step 3: Configure MySQL
+
+1. **Login to MySQL:**
+```bash
+mysql -u root -p
+```
+
+2. **Create Database (optional - server will create it automatically):**
+```sql
+CREATE DATABASE burger_knight CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EXIT;
+```
+
+3. **Note your MySQL credentials:**
+   - Username (usually `root`)
+   - Password (the one you set during installation)
+   - Port (usually `3306`)
+
+## Step 4: Configure Backend
+
+1. **Navigate to backend folder:**
 ```bash
 cd backend
+```
+
+2. **Copy environment file:**
+```bash
+cp .env.example .env
+```
+
+3. **Edit `.env` file with your MySQL credentials:**
+```env
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=burger_knight
+DB_PORT=3306
+PORT=3000
+```
+
+**OR** edit `config.js` directly:
+```javascript
+module.exports = {
+  database: {
+    host: 'localhost',
+    user: 'root',
+    password: 'your_password',
+    database: 'burger_knight',
+    port: 3306
+  }
+};
+```
+
+## Step 5: Install Dependencies
+
+```bash
 npm install
 ```
 
-## Step 3: Start the Server
+## Step 6: Start the Server
 
 ```bash
 npm start
 ```
 
-The server will start on `http://localhost:3000`
+You should see:
+```
+✅ MySQL database initialized successfully
+📊 Database: burger_knight
+🚀 Favorites API server running on http://localhost:3000
+🔌 MySQL Host: localhost:3306
+```
 
-## Step 4: Update Flutter App API URL
+## Step 7: Test the Server
+
+Open your browser and visit:
+```
+http://localhost:3000/health
+```
+
+You should see:
+```json
+{
+  "status": "ok",
+  "message": "Favorites API is running",
+  "database": "connected"
+}
+```
+
+## Step 8: Update Flutter App API URL
 
 Update `lib/core/config/api_config.dart`:
 
@@ -41,10 +136,12 @@ static const String baseUrl = 'http://localhost:3000/api/v1';
 ```
 
 **For Physical Device:**
-1. Find your computer's IP address (e.g., `192.168.1.100`)
+1. Find your computer's IP address:
+   - Windows: `ipconfig` (look for IPv4 Address)
+   - macOS/Linux: `ifconfig` or `ip addr`
 2. Update the URL:
 ```dart
-static const String baseUrl = 'http://192.168.1.100:3000/api/v1';
+static const String baseUrl = 'http://192.168.1.100:3000/api/v1'; // Replace with your IP
 ```
 
 **For Web:**
@@ -52,31 +149,73 @@ static const String baseUrl = 'http://192.168.1.100:3000/api/v1';
 static const String baseUrl = 'http://localhost:3000/api/v1';
 ```
 
-## Step 5: Test the API
-
-Open your browser and visit:
-```
-http://localhost:3000/health
-```
-
-You should see: `{"status":"ok","message":"Favorites API is running"}`
-
 ## Troubleshooting
 
-### Port Already in Use
-If port 3000 is busy, change it in `server.js`:
-```javascript
-const PORT = process.env.PORT || 3001; // Change to 3001 or any available port
+### MySQL Connection Refused
+
+1. **Check if MySQL is running:**
+   ```bash
+   # Windows
+   net start MySQL
+   
+   # macOS
+   brew services list
+   brew services start mysql
+   
+   # Linux
+   sudo systemctl status mysql
+   sudo systemctl start mysql
+   ```
+
+2. **Verify credentials** in `.env` or `config.js`
+
+3. **Test MySQL connection manually:**
+   ```bash
+   mysql -u root -p -h localhost
+   ```
+
+### Access Denied Error
+
+Grant permissions to your MySQL user:
+```sql
+GRANT ALL PRIVILEGES ON burger_knight.* TO 'root'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-### Database Issues
-The database file `favorites.db` will be created automatically. If you need to reset it, just delete the file and restart the server.
+### Port Already in Use
 
-### CORS Errors
-Make sure CORS is enabled in `server.js` (it should be by default).
+Change the port in `.env`:
+```env
+PORT=3001
+```
 
-### Connection Refused
-- Make sure the server is running
+### Database Connection Timeout
+
 - Check firewall settings
-- Verify the IP address/URL is correct for your platform
+- Verify MySQL is listening on the correct port (usually 3306)
+- For remote connections, ensure MySQL allows remote access
 
+### Table Creation Failed
+
+The server will try to create the table automatically. If it fails, create it manually:
+
+```sql
+USE burger_knight;
+
+CREATE TABLE IF NOT EXISTS favorites (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId VARCHAR(255) NOT NULL DEFAULT 'default_user',
+  productId VARCHAR(255) NOT NULL,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_user_product (userId, productId),
+  INDEX idx_userId (userId),
+  INDEX idx_productId (productId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+## Next Steps
+
+1. ✅ Server is running
+2. ✅ Database is connected
+3. ✅ Flutter app API URL is configured
+4. 🎉 Test favorites functionality in your app!

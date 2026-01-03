@@ -4,31 +4,65 @@ A simple Node.js/Express backend server for managing user favorites in the Burge
 
 ## Features
 
-- ✅ SQLite database for persistent storage
+- ✅ MySQL database for persistent storage
 - ✅ RESTful API endpoints for favorites
 - ✅ CORS enabled for Flutter app
 - ✅ Error handling and validation
+- ✅ Connection pooling for better performance
+
+## Prerequisites
+
+- Node.js (v14 or higher)
+- MySQL Server (v5.7 or higher, or MariaDB 10.2+)
+- npm or yarn
 
 ## Setup
 
-### Prerequisites
+### 1. Install MySQL
 
-- Node.js (v14 or higher)
-- npm or yarn
+If you don't have MySQL installed:
+- **Windows**: Download from [MySQL Downloads](https://dev.mysql.com/downloads/mysql/)
+- **macOS**: `brew install mysql` or download from MySQL website
+- **Linux**: `sudo apt-get install mysql-server` (Ubuntu/Debian) or `sudo yum install mysql-server` (CentOS/RHEL)
 
-### Installation
+### 2. Create Database
 
-1. Navigate to the backend directory:
-```bash
-cd backend
+Login to MySQL and create the database:
+
+```sql
+CREATE DATABASE burger_knight;
 ```
 
-2. Install dependencies:
+Or the server will create it automatically on first run.
+
+### 3. Configure Database Connection
+
+Copy `.env.example` to `.env` and update with your MySQL credentials:
+
 ```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+```env
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password_here
+DB_NAME=burger_knight
+DB_PORT=3306
+```
+
+Or update `config.js` directly with your credentials.
+
+### 4. Install Dependencies
+
+```bash
+cd backend
 npm install
 ```
 
-3. Start the server:
+### 5. Start the Server
+
 ```bash
 npm start
 ```
@@ -38,7 +72,7 @@ For development with auto-reload:
 npm run dev
 ```
 
-The server will start on `http://localhost:3000`
+The server will start on `http://localhost:3000` and automatically create the `favorites` table if it doesn't exist.
 
 ## API Endpoints
 
@@ -98,22 +132,36 @@ DELETE /favorites/:productId?userId=default_user
 }
 ```
 
-## Database
+## Database Schema
 
-The server uses SQLite with a `favorites.db` file that is automatically created in the backend directory.
+The server automatically creates the `favorites` table with the following structure:
 
-**Schema:**
 ```sql
 CREATE TABLE favorites (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  userId TEXT NOT NULL DEFAULT 'default_user',
-  productId TEXT NOT NULL,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(userId, productId)
-)
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId VARCHAR(255) NOT NULL DEFAULT 'default_user',
+  productId VARCHAR(255) NOT NULL,
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_user_product (userId, productId),
+  INDEX idx_userId (userId),
+  INDEX idx_productId (productId)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 ```
 
 ## Configuration
+
+### Environment Variables
+
+You can set these environment variables or update `config.js`:
+
+- `DB_HOST` - MySQL host (default: localhost)
+- `DB_USER` - MySQL username (default: root)
+- `DB_PASSWORD` - MySQL password (default: empty)
+- `DB_NAME` - Database name (default: burger_knight)
+- `DB_PORT` - MySQL port (default: 3306)
+- `PORT` - Server port (default: 3000)
+
+### Flutter App Configuration
 
 Update the API base URL in your Flutter app:
 
@@ -131,6 +179,9 @@ static const String baseUrl = 'http://localhost:3000/api/v1';
 You can test the API using curl or Postman:
 
 ```bash
+# Health check
+curl http://localhost:3000/health
+
 # Get favorites
 curl http://localhost:3000/api/v1/favorites
 
@@ -143,13 +194,51 @@ curl -X POST http://localhost:3000/api/v1/favorites \
 curl -X DELETE http://localhost:3000/api/v1/favorites/product_1
 ```
 
+## Troubleshooting
+
+### MySQL Connection Error
+
+1. Make sure MySQL is running:
+   ```bash
+   # Windows
+   net start MySQL
+   
+   # macOS/Linux
+   sudo systemctl start mysql
+   # or
+   brew services start mysql
+   ```
+
+2. Verify credentials in `.env` or `config.js`
+
+3. Check MySQL user permissions:
+   ```sql
+   GRANT ALL PRIVILEGES ON burger_knight.* TO 'your_user'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
+
+### Port Already in Use
+
+Change the port in `.env`:
+```env
+PORT=3001
+```
+
+### Database Doesn't Exist
+
+The server will create the database automatically, but you can create it manually:
+```sql
+CREATE DATABASE burger_knight CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
 ## Production Deployment
 
 For production:
-1. Use a proper database (PostgreSQL, MySQL, MongoDB)
+1. Use environment variables for all sensitive data
 2. Add authentication middleware
-3. Use environment variables for configuration
-4. Enable HTTPS
-5. Add rate limiting
-6. Add logging and monitoring
-
+3. Enable HTTPS
+4. Add rate limiting
+5. Add logging and monitoring
+6. Use a managed MySQL service (AWS RDS, Google Cloud SQL, etc.)
+7. Set up database backups
+8. Configure connection pooling appropriately

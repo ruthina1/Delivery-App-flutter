@@ -18,22 +18,33 @@ class OrderService extends ChangeNotifier {
 
   /// Initialize - load local orders
   Future<void> initialize() async {
+    debugPrint('🔵 [OrderService] initialize START');
     await _loadLocalOrders();
+    debugPrint('✅ [OrderService] initialize END - Loaded ${_localOrders.length} orders');
   }
 
   Future<void> _loadLocalOrders() async {
+    debugPrint('📂 [OrderService] _loadLocalOrders START');
     try {
       final prefs = await SharedPreferences.getInstance();
       final ordersJson = prefs.getString(_ordersPrefsKey);
       if (ordersJson != null) {
+        debugPrint('📂 [OrderService] Found orders JSON, length: ${ordersJson.length}');
         final decoded = jsonDecode(ordersJson) as List<dynamic>;
+        debugPrint('📂 [OrderService] Decoded ${decoded.length} orders');
         _localOrders = decoded.map((json) => _orderFromJson(json as Map<String, dynamic>)).toList();
+        debugPrint('✅ [OrderService] Loaded ${_localOrders.length} orders successfully');
         notifyListeners();
+      } else {
+        debugPrint('⚠️ [OrderService] No orders JSON found in SharedPreferences');
+        _localOrders = [];
       }
-    } catch (e) {
-      debugPrint('Error loading local orders: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ [OrderService] Error loading local orders: $e');
+      debugPrint('❌ [OrderService] Stack trace: $stackTrace');
       _localOrders = [];
     }
+    debugPrint('📂 [OrderService] _loadLocalOrders END');
   }
 
   Future<void> _saveLocalOrders() async {
@@ -297,17 +308,31 @@ class OrderService extends ChangeNotifier {
 
   /// Get order by ID - tries API first, falls back to local
   Future<OrderModel> getOrderById(String id) async {
+    debugPrint('🔍 [OrderService] getOrderById START - OrderId: $id');
+    debugPrint('🔍 [OrderService] Local orders count: ${_localOrders.length}');
+    debugPrint('🔍 [OrderService] Local order IDs: ${_localOrders.map((o) => o.id).toList()}');
+    
     try {
-      // Try API first
-      return await _orderApi.getOrderById(id);
+      debugPrint('🔍 [OrderService] Attempting API call for order: $id');
+      final order = await _orderApi.getOrderById(id);
+      debugPrint('✅ [OrderService] API call successful - OrderNumber: ${order.orderNumber}');
+      return order;
     } catch (e) {
       // API failed, check local orders
-      debugPrint('API getOrderById failed, checking local orders: $e');
+      debugPrint('⚠️ [OrderService] API getOrderById failed: $e');
+      debugPrint('🔍 [OrderService] Loading local orders...');
       await _loadLocalOrders();
+      debugPrint('🔍 [OrderService] Local orders after load: ${_localOrders.length}');
+      debugPrint('🔍 [OrderService] Searching for order ID: $id');
+      
       try {
-        return _localOrders.firstWhere((order) => order.id == id);
-      } catch (_) {
-        throw ApiException('Order not found');
+        final order = _localOrders.firstWhere((order) => order.id == id);
+        debugPrint('✅ [OrderService] Found order locally - OrderNumber: ${order.orderNumber}, Status: ${order.status}');
+        return order;
+      } catch (notFoundError) {
+        debugPrint('❌ [OrderService] Order not found in local orders');
+        debugPrint('❌ [OrderService] Available IDs: ${_localOrders.map((o) => o.id).toList()}');
+        throw ApiException('Order not found: $id');
       }
     }
   }
