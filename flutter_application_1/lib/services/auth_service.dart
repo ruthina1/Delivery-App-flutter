@@ -1,19 +1,23 @@
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../data/models/models.dart';
-import 'api/auth_api_service.dart';
-import 'api/api_client.dart';
 import '../core/exceptions/api_exception.dart';
+import 'cart_service.dart';
+import 'favorite_service.dart';
+import 'order_service.dart';
+import 'notification_service.dart';
 
-/// Global authentication service for managing user state
+/// Global authentication service for managing user state - Firebase only
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
 
-  final _authApi = AuthApiService();
-  final _apiClient = ApiClient();
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   UserModel? _currentUser;
   bool _isAuthenticated = false;
@@ -25,58 +29,165 @@ class AuthService extends ChangeNotifier {
 
   static const String _userPrefsKey = 'current_user';
   static const String _tokenPrefsKey = 'auth_token';
+  
+  // Listen to Firebase Auth state changes
+  void _setupAuthListener() {
+    _firebaseAuth.authStateChanges().listen((User? firebaseUser) async {
+      if (firebaseUser != null) {
+        await _loadUserFromFirestore(firebaseUser.uid);
+        // Re-initialize services when user logs in
+        await _reinitializeServices();
+      } else {
+        _currentUser = null;
+        _isAuthenticated = false;
+        // Clear services when user logs out
+        await _clearServices();
+        notifyListeners();
+      }
+    });
+  }
+  
+  /// Re-initialize all services when user logs in
+  Future<void> _reinitializeServices() async {
+    try {
+      debugPrint('🟢 [AuthService] Re-initializing services for logged-in user');
+      await OrderService().initialize();
+      await CartService().initialize();
+      await FavoriteService().initialize();
+      await NotificationService().initialize();
+      debugPrint('✅ [AuthService] Services re-initialized');
+    } catch (e) {
+      debugPrint('🔴 [AuthService] Error re-initializing services: $e');
+    }
+  }
+  
+  /// Clear services when user logs out
+  Future<void> _clearServices() async {
+    try {
+      debugPrint('🟢 [AuthService] Clearing services for logged-out user');
+      // Services will handle clearing themselves when they detect no user
+    } catch (e) {
+      debugPrint('🔴 [AuthService] Error clearing services: $e');
+    }
+  }
 
   /// Initialize - load saved user session
   Future<void> initialize() async {
     try {
-      // Load local users first
+      // Set up Firebase Auth listener
+      _setupAuthListener();
+      
+      // Check Firebase Auth first
+      final firebaseUser = _firebaseAuth.currentUser;
+      if (firebaseUser != null) {
+        await _loadUserFromFirestore(firebaseUser.uid);
+        return;
+      }
+      
+      // Fallback: Load local users for backward compatibility (local storage only)
       await _loadLocalUsers();
       
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_tokenPrefsKey);
       
-      if (token != null) {
-        // Check if it's a local token
-        if (token.startsWith('local_token_')) {
-          // Load local user session
-          final userId = token.replaceFirst('local_token_', '');
-          // Find user by ID
-          for (var entry in _localUsers.entries) {
-            if (entry.value['id'] == userId) {
-              final userData = entry.value;
-              _currentUser = UserModel(
-                id: userData['id']?.toString() ?? '',
-                name: userData['name']?.toString() ?? '',
-                email: userData['email']?.toString() ?? '',
-                phone: userData['phone']?.toString() ?? '',
-                avatarUrl: userData['avatarUrl']?.toString(),
-                favoriteProductIds: (userData['favoriteProductIds'] as List<dynamic>?)
-                        ?.map((e) => e.toString())
-                        .toList() ??
-                    [],
-              );
-              _isAuthenticated = true;
-              notifyListeners();
-              return;
-            }
-          }
-        } else {
-          // Try API authentication
-          _apiClient.setAuthToken(token);
-          try {
-            _currentUser = await _authApi.getCurrentUser();
+      if (token != null && token.startsWith('local_token_')) {
+        // Load local user session
+        final userId = token.replaceFirst('local_token_', '');
+        // Find user by ID
+        for (var entry in _localUsers.entries) {
+          if (entry.value['id'] == userId) {
+            final userData = entry.value;
+            _currentUser = UserModel(
+              id: userData['id']?.toString() ?? '',
+              name: userData['name']?.toString() ?? '',
+              email: userData['email']?.toString() ?? '',
+              phone: userData['phone']?.toString() ?? '',
+              avatarUrl: userData['avatarUrl']?.toString(),
+              favoriteProductIds: (userData['favoriteProductIds'] as List<dynamic>?)
+                      ?.map((e) => e.toString())
+                      .toList() ??
+                  [],
+            );
             _isAuthenticated = true;
             notifyListeners();
             return;
-          } catch (e) {
-            // Token expired or invalid, clear it
-            await prefs.remove(_tokenPrefsKey);
-            await prefs.remove(_userPrefsKey);
           }
         }
       }
     } catch (e) {
       debugPrint('Error initializing auth: $e');
+    }
+  }
+  
+  /// Load user data from Firestore
+  Future<void> _loadUserFromFirestore(String userId) async {
+    try {
+      debugPrint('🟢 [AuthService] Loading user from Firestore: $userId');
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        debugPrint('🟢 [AuthService] User document found: ${userData['email']}');
+        
+        _currentUser = UserModel(
+          id: userId,
+          name: userData['name']?.toString() ?? '',
+          email: userData['email']?.toString() ?? '',
+          phone: userData['phone']?.toString() ?? '',
+          avatarUrl: userData['avatarUrl']?.toString(),
+          favoriteProductIds: (userData['favoriteProductIds'] as List<dynamic>?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+              [],
+        );
+        _isAuthenticated = true;
+        debugPrint('✅ [AuthService] User loaded successfully: ${_currentUser!.email}');
+        notifyListeners();
+      } else {
+        debugPrint('🟡 [AuthService] User document not found, creating...');
+        // User document doesn't exist, create it from Firebase Auth user
+        final firebaseUser = _firebaseAuth.currentUser;
+        if (firebaseUser != null) {
+          await _createUserDocument(firebaseUser);
+        } else {
+          debugPrint('🔴 [AuthService] Firebase user is null, cannot create document');
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('🔴 [AuthService] Error loading user from Firestore: $e');
+      debugPrint('🔴 [AuthService] Stack trace: $stackTrace');
+    }
+  }
+  
+  /// Create user document in Firestore
+  Future<void> _createUserDocument(User firebaseUser, {String? name, String? phone}) async {
+    try {
+      debugPrint('🟢 [AuthService] Creating Firestore document for: ${firebaseUser.uid}');
+      
+      final userData = {
+        'id': firebaseUser.uid,
+        'name': name ?? firebaseUser.displayName ?? '',
+        'email': firebaseUser.email ?? '',
+        'phone': phone ?? '',
+        'avatarUrl': firebaseUser.photoURL,
+        'favoriteProductIds': [],
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      await _firestore.collection('users').doc(firebaseUser.uid).set(
+        userData,
+        SetOptions(merge: true),
+      );
+      
+      debugPrint('✅ [AuthService] Firestore document created successfully');
+      
+      // Load the user immediately after creating the document
+      await _loadUserFromFirestore(firebaseUser.uid);
+    } catch (e, stackTrace) {
+      debugPrint('🔴 [AuthService] Error creating user document: $e');
+      debugPrint('🔴 [AuthService] Stack trace: $stackTrace');
+      rethrow; // Re-throw to let caller handle the error
     }
   }
 
@@ -95,39 +206,106 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Try API first
-      final response = await _authApi.signUp(
-        name: name,
+      debugPrint('🟢 [AuthService] Starting signup for: $email');
+      
+      // Try Firebase Auth first
+      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
-        phone: phone,
         password: password,
       );
-
-      // Extract token and user from response
-      final token = response['token']?.toString() ?? response['accessToken']?.toString();
-      final userData = response['user'] ?? response;
-
-      if (token != null) {
-        await _saveSession(token, userData);
-        _currentUser = _authApi.userFromJson(userData);
-        _isAuthenticated = true;
-        _isLoading = false;
-        notifyListeners();
-        return true;
+      
+      debugPrint('🟢 [AuthService] Firebase user created: ${userCredential.user?.uid}');
+      
+      if (userCredential.user != null) {
+        // Update display name
+        try {
+          await userCredential.user!.updateDisplayName(name);
+          debugPrint('🟢 [AuthService] Display name updated');
+        } catch (e) {
+          debugPrint('🟡 [AuthService] Failed to update display name: $e');
+          // Continue even if display name update fails
+        }
+        
+        // Create user document in Firestore and wait for it to complete
+        debugPrint('🟢 [AuthService] Creating Firestore document...');
+        try {
+          await _createUserDocument(userCredential.user!, name: name, phone: phone);
+          debugPrint('🟢 [AuthService] Firestore document created');
+        } catch (firestoreError) {
+          debugPrint('🟡 [AuthService] Firestore document creation failed: $firestoreError');
+          debugPrint('🟡 [AuthService] Continuing with Firebase Auth user only...');
+          // Continue even if Firestore fails - we can create the document later
+          // For now, create a user model from Firebase Auth data
+          _currentUser = UserModel(
+            id: userCredential.user!.uid,
+            name: name,
+            email: userCredential.user!.email ?? email,
+            phone: phone,
+            avatarUrl: userCredential.user!.photoURL,
+            favoriteProductIds: [],
+          );
+          _isAuthenticated = true;
+          notifyListeners();
+        }
+        
+        // Ensure user is loaded before returning
+        if (_currentUser == null) {
+          debugPrint('🟡 [AuthService] User not loaded yet, loading from Firestore...');
+          try {
+            await _loadUserFromFirestore(userCredential.user!.uid);
+          } catch (e) {
+            debugPrint('🟡 [AuthService] Failed to load from Firestore, using Firebase Auth data: $e');
+            // Fallback: create user from Firebase Auth if Firestore fails
+            if (_currentUser == null) {
+              _currentUser = UserModel(
+                id: userCredential.user!.uid,
+                name: name,
+                email: userCredential.user!.email ?? email,
+                phone: phone,
+                avatarUrl: userCredential.user!.photoURL,
+                favoriteProductIds: [],
+              );
+              _isAuthenticated = true;
+              notifyListeners();
+            }
+          }
+        }
+        
+        // Verify user is authenticated
+        if (_currentUser != null && _isAuthenticated) {
+          debugPrint('✅ [AuthService] Signup successful, user: ${_currentUser!.email}');
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        } else {
+          debugPrint('🔴 [AuthService] User created but not authenticated properly');
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
       }
       
+      debugPrint('🔴 [AuthService] User credential is null');
       _isLoading = false;
       notifyListeners();
       return false;
-    } catch (e) {
-      // API failed, use local fallback for development
-      debugPrint('API signup failed, using local fallback: $e');
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Firebase signup failed: ${e.code} - ${e.message}');
+      _isLoading = false;
+      notifyListeners();
+      
+      // Fallback to local storage only
       return await _localSignUp(
         name: name,
         email: email,
         phone: phone,
         password: password,
       );
+    } catch (e) {
+      debugPrint('Unexpected signup error: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -137,17 +315,14 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Try API first
-      final response = await _authApi.signIn(email: email, password: password);
-
-      // Extract token and user from response
-      final token = response['token']?.toString() ?? response['accessToken']?.toString();
-      final userData = response['user'] ?? response;
-
-      if (token != null) {
-        await _saveSession(token, userData);
-        _currentUser = _authApi.userFromJson(userData);
-        _isAuthenticated = true;
+      // Try Firebase Auth first
+      final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      if (userCredential.user != null) {
+        await _loadUserFromFirestore(userCredential.user!.uid);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -156,12 +331,19 @@ class AuthService extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       return false;
-    } catch (e) {
-      // API failed, use local fallback for development
-      debugPrint('API signin failed, using local fallback: $e');
-      // Ensure local users are loaded before attempting signin
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Firebase signin failed: ${e.code} - ${e.message}');
+      _isLoading = false;
+      notifyListeners();
+      
+      // Fallback to local storage only
       await _loadLocalUsers();
       return await _localSignIn(email: email, password: password);
+    } catch (e) {
+      debugPrint('Unexpected signin error: $e');
+      _isLoading = false;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -310,10 +492,13 @@ class AuthService extends ChangeNotifier {
   /// Sign out user
   Future<void> signOut() async {
     try {
+      // Sign out from Firebase
+      await _firebaseAuth.signOut();
+      
+      // Clear local storage
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_tokenPrefsKey);
       await prefs.remove(_userPrefsKey);
-      _apiClient.setAuthToken(null);
     } catch (e) {
       debugPrint('Error signing out: $e');
     }
@@ -331,10 +516,32 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final updated = await _authApi.updateProfile(updatedUser);
-      _currentUser = updated;
-      _isLoading = false;
-      notifyListeners();
+      final firebaseUser = _firebaseAuth.currentUser;
+      
+      if (firebaseUser != null) {
+        // Update in Firestore
+        await _firestore.collection('users').doc(firebaseUser.uid).update({
+          'name': updatedUser.name,
+          'phone': updatedUser.phone,
+          'avatarUrl': updatedUser.avatarUrl,
+          'favoriteProductIds': updatedUser.favoriteProductIds,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        
+        // Update display name in Firebase Auth
+        if (updatedUser.name != firebaseUser.displayName) {
+          await firebaseUser.updateDisplayName(updatedUser.name);
+        }
+        
+        // Reload user data
+        await _loadUserFromFirestore(firebaseUser.uid);
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+      
+      // No Firebase user, cannot update
+      throw ApiException('User must be logged in to update profile');
     } catch (e) {
       _isLoading = false;
       notifyListeners();
@@ -362,7 +569,6 @@ class AuthService extends ChangeNotifier {
         // Fallback: try to convert to map
         await prefs.setString(_userPrefsKey, jsonEncode(userData));
       }
-      _apiClient.setAuthToken(token);
     } catch (e) {
       debugPrint('Error saving session: $e');
     }

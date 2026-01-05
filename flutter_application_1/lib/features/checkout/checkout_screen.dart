@@ -14,6 +14,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _cartService = CartService();
   final _orderService = OrderService();
   final _addressApi = AddressApiService();
@@ -35,9 +36,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       'subtitle': 'Pay when you receive your order',
     },
     {
-      'name': 'Chapa',
-      'icon': Icons.account_balance_wallet,
-      'subtitle': 'Pay with Chapa mobile payment',
+      'name': 'Credit Card',
+      'icon': Icons.credit_card,
+      'subtitle': 'Pay with your credit card',
     },
   ];
 
@@ -67,11 +68,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    // Validate address fields
-    if (_streetController.text.isEmpty || _phoneController.text.isEmpty) {
+    // Validate form
+    if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please fill in your delivery address and phone number'),
+          content: const Text('Please fill in all required fields correctly'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -133,13 +134,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       }
 
-      // Prepare order items
+      // Prepare order items with full product data
       final orderItems = _cartService.cartItems.map((item) {
         return {
-          'productId': item.product.id,
-          'productName': item.product.name,
-          'productImage': item.product.image,
-          'price': item.product.price,
+          'product': {
+            'id': item.product.id,
+            'name': item.product.name,
+            'description': item.product.description,
+            'image': item.product.image,
+            'price': item.product.price,
+            'originalPrice': item.product.originalPrice,
+            'rating': item.product.rating,
+            'reviewCount': item.product.reviewCount,
+            'categoryId': item.product.categoryId,
+            'ingredients': item.product.ingredients,
+            'isPopular': item.product.isPopular,
+            'isFeatured': item.product.isFeatured,
+            'preparationTime': item.product.preparationTime,
+            'calories': item.product.calories,
+          },
           'quantity': item.quantity,
           'customizations': item.customizations,
         };
@@ -244,21 +257,56 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: ElevatedButton(
                     onPressed: () {
                       debugPrint('🔵 [Checkout] Track Order button clicked - OrderId: ${order.id}');
-                      // Close dialog first
-                      Navigator.of(dialogContext, rootNavigator: true).pop();
-                      debugPrint('✅ [Checkout] Dialog closed');
-                      // Wait a frame for dialog to fully close, then navigate
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        debugPrint('🔵 [Checkout] Navigating to order tracking...');
-                        Navigator.of(context, rootNavigator: true).pushNamed(
-                          '/order-track',
-                          arguments: order.id,
-                        ).then((_) {
-                          debugPrint('✅ [Checkout] Navigation to order tracking completed');
-                        }).catchError((error) {
-                          debugPrint('❌ [Checkout] Navigation error: $error');
+                      try {
+                        // Close dialog first
+                        Navigator.of(dialogContext, rootNavigator: true).pop();
+                        debugPrint('✅ [Checkout] Dialog closed');
+                        
+                        // Wait a bit longer for dialog to fully close, then navigate
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (!mounted) {
+                            debugPrint('⚠️ [Checkout] Widget not mounted, cannot navigate');
+                            return;
+                          }
+                          debugPrint('🔵 [Checkout] Navigating to order tracking...');
+                          try {
+                            Navigator.of(context, rootNavigator: true).pushNamed(
+                              '/order-track',
+                              arguments: order.id,
+                            ).then((_) {
+                              debugPrint('✅ [Checkout] Navigation to order tracking completed');
+                            }).catchError((error) {
+                              debugPrint('❌ [Checkout] Navigation error: $error');
+                              // Fallback: navigate to main screen if tracking fails
+                              if (mounted) {
+                                Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                                  '/main',
+                                  (route) => false,
+                                );
+                              }
+                            });
+                          } catch (navError) {
+                            debugPrint('❌ [Checkout] Navigation exception: $navError');
+                            // Fallback: navigate to main screen
+                            if (mounted) {
+                              Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                                '/main',
+                                (route) => false,
+                              );
+                            }
+                          }
                         });
-                      });
+                      } catch (e) {
+                        debugPrint('❌ [Checkout] Error in Track Order button: $e');
+                        // Fallback: close dialog and go to main
+                        Navigator.of(dialogContext, rootNavigator: true).pop();
+                        if (mounted) {
+                          Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+                            '/main',
+                            (route) => false,
+                          );
+                        }
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
@@ -332,7 +380,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               style: AppTextStyles.heading4,
             ),
             const SizedBox(height: AppSizes.paddingM),
-            _buildAddressForm(),
+            Form(
+              key: _formKey,
+              child: _buildAddressForm(),
+            ),
             const SizedBox(height: AppSizes.paddingL),
 
             // Payment Method Section
@@ -513,13 +564,43 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             label: 'Street Address *',
             hint: 'Enter your street address',
             icon: Icons.location_on_outlined,
+            isRequired: true,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your street address';
+              }
+              if (value.trim().length < 5) {
+                return 'Street address must be at least 5 characters';
+              }
+              if (value.trim().length > 200) {
+                return 'Street address must be less than 200 characters';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: AppSizes.paddingM),
           _buildTextField(
             controller: _cityController,
-            label: 'City',
+            label: 'City *',
             hint: 'Enter your city',
             icon: Icons.location_city_outlined,
+            isRequired: true,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your city';
+              }
+              if (value.trim().length < 2) {
+                return 'City name must be at least 2 characters';
+              }
+              if (value.trim().length > 50) {
+                return 'City name must be less than 50 characters';
+              }
+              // Check for valid city name (letters, spaces, hyphens)
+              if (!RegExp(r'^[a-zA-Z\s\-]+$').hasMatch(value.trim())) {
+                return 'City name can only contain letters, spaces, and hyphens';
+              }
+              return null;
+            },
           ),
           const SizedBox(height: AppSizes.paddingM),
           _buildTextField(
@@ -527,6 +608,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             label: 'Landmark (Optional)',
             hint: 'Near mosque, school, etc.',
             icon: Icons.place_outlined,
+            validator: (value) {
+              // Optional field, but if provided, validate length
+              if (value != null && value.trim().isNotEmpty) {
+                if (value.trim().length > 100) {
+                  return 'Landmark must be less than 100 characters';
+                }
+              }
+              return null;
+            },
           ),
           const SizedBox(height: AppSizes.paddingM),
           _buildTextField(
@@ -535,6 +625,50 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             hint: '+251 9XX XXX XXXX',
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
+            isRequired: true,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter your phone number';
+              }
+              final trimmedValue = value.trim();
+              // Remove spaces, dashes, and plus signs for validation
+              final cleanedValue = trimmedValue.replaceAll(RegExp(r'[\s\-+]'), '');
+              
+              // Check if it's all digits
+              if (!RegExp(r'^\d+$').hasMatch(cleanedValue)) {
+                return 'Phone number must contain only digits';
+              }
+              
+              // Ethiopian phone number validation (9-15 digits)
+              if (cleanedValue.length < 9 || cleanedValue.length > 15) {
+                return 'Phone number must be between 9 and 15 digits';
+              }
+              
+              // Check if it starts with valid Ethiopian mobile prefix
+              if (cleanedValue.startsWith('251')) {
+                // International format: 251XXXXXXXXX (should be 12 digits total)
+                if (cleanedValue.length != 12) {
+                  return 'Invalid phone number format';
+                }
+                if (!['2519', '2517'].contains(cleanedValue.substring(0, 4))) {
+                  return 'Invalid Ethiopian mobile number';
+                }
+              } else if (cleanedValue.startsWith('0')) {
+                // Local format: 09XXXXXXXXX (should be 10 digits)
+                if (cleanedValue.length != 10) {
+                  return 'Invalid phone number format';
+                }
+              } else if (cleanedValue.startsWith('9') || cleanedValue.startsWith('7')) {
+                // Local format without 0: 9XXXXXXXXX (should be 9 digits)
+                if (cleanedValue.length != 9) {
+                  return 'Invalid phone number format';
+                }
+              } else {
+                return 'Phone number must start with 0, 9, 7, or +251';
+              }
+              
+              return null;
+            },
           ),
         ],
       ),
@@ -547,6 +681,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     required String hint,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+    bool isRequired = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -562,6 +698,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           controller: controller,
           keyboardType: keyboardType,
           enabled: !_isPlacingOrder,
+          validator: validator,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: AppTextStyles.bodyMedium.copyWith(
@@ -585,6 +722,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppSizes.radiusM),
               borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppSizes.radiusM),
+              borderSide: const BorderSide(color: AppColors.error, width: 1.5),
             ),
           ),
         ),

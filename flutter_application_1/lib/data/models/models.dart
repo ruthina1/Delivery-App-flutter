@@ -5,4 +5,5 @@ export 'cart_item_model.dart';
 export 'address_model.dart';
 export 'order_model.dart';
 export 'user_model.dart';
+export 'exercise_model.dart';
 

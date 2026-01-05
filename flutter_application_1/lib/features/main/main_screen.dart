@@ -51,14 +51,26 @@ class _MainScreenState extends State<MainScreen> {
   ];
 
   void _onTabTapped(int index) {
-    if (!mounted) return;
+    debugPrint('🔵 [MainScreen] _onTabTapped called with index: $index');
+    if (!mounted) {
+      debugPrint('🔴 [MainScreen] Widget not mounted, returning');
+      return;
+    }
     
     if (index == 2) {
+      debugPrint('🟢 [MainScreen] Navigating to cart');
       Navigator.pushNamed(context, '/cart');
       return;
     }
     if (index == 3) {
-      Navigator.pushNamed(context, '/orders');
+      debugPrint('🟢 [MainScreen] Navigating to orders');
+      try {
+        Navigator.pushNamed(context, '/orders');
+        debugPrint('✅ [MainScreen] Navigation to orders initiated successfully');
+      } catch (e, stackTrace) {
+        debugPrint('🔴 [MainScreen] ERROR navigating to orders: $e');
+        debugPrint('🔴 [MainScreen] Stack trace: $stackTrace');
+      }
       return;
     }
     if (mounted) {
@@ -183,7 +195,10 @@ class _MainScreenState extends State<MainScreen> {
             : false;
 
     return GestureDetector(
-      onTap: () => _onTabTapped(index),
+      onTap: () {
+        debugPrint('🟢 [MainScreen] Nav item tapped - index: $index, label: $label');
+        _onTabTapped(index);
+      },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 60,

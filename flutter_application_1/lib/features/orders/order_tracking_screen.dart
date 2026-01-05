@@ -25,10 +25,21 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   void initState() {
     super.initState();
     debugPrint('🔵 [OrderTracking] initState - OrderId: ${widget.orderId}');
-    _orderService.addListener(_onOrderChanged);
-    debugPrint('🔵 [OrderTracking] Starting to load order...');
-    _loadOrder();
-    // Don't start polling until order is loaded
+    try {
+      _orderService.addListener(_onOrderChanged);
+      debugPrint('🔵 [OrderTracking] Starting to load order...');
+      _loadOrder();
+      // Don't start polling until order is loaded
+    } catch (e, stackTrace) {
+      debugPrint('❌ [OrderTracking] Error in initState: $e');
+      debugPrint('❌ [OrderTracking] Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to initialize: ${e.toString()}';
+        });
+      }
+    }
   }
 
   @override
@@ -56,6 +67,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
     
     try {
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = null;
+        });
+      }
+      
       debugPrint('📥 [OrderTracking] Initializing order service...');
       await _orderService.initialize();
       debugPrint('✅ [OrderTracking] Order service initialized');
@@ -159,22 +177,25 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     debugPrint('🎨 [OrderTracking] build() called - isLoading: $_isLoading, hasOrder: ${_order != null}, error: $_errorMessage');
-    if (_isLoading) {
-      debugPrint('⏳ [OrderTracking] Showing loading screen');
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
+    
+    // Wrap in error boundary
+    try {
+      if (_isLoading) {
+        debugPrint('⏳ [OrderTracking] Showing loading screen');
+        return Scaffold(
           backgroundColor: AppColors.background,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
-            onPressed: () => Navigator.pop(context),
+          appBar: AppBar(
+            backgroundColor: AppColors.background,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text('Track Order', style: AppTextStyles.heading3),
           ),
-          title: Text('Track Order', style: AppTextStyles.heading3),
-        ),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+          body: const Center(child: CircularProgressIndicator()),
+        );
+      }
 
     if (_errorMessage != null || _order == null) {
       return Scaffold(
@@ -400,6 +421,53 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         ),
       ),
     );
+    } catch (e, stackTrace) {
+      debugPrint('❌ [OrderTracking] Error in build(): $e');
+      debugPrint('❌ [OrderTracking] Stack trace: $stackTrace');
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text('Track Order', style: AppTextStyles.heading3),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('⚠️', style: TextStyle(fontSize: 80)),
+              const SizedBox(height: AppSizes.paddingL),
+              Text(
+                'Something went wrong',
+                style: AppTextStyles.heading3,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSizes.paddingS),
+              Padding(
+                padding: const EdgeInsets.all(AppSizes.paddingM),
+                child: Text(
+                  'Error: ${e.toString()}',
+                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: AppSizes.paddingL),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                ),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   String _formatTime(DateTime date) {

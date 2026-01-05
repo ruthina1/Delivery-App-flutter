@@ -22,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _cartService.addListener(_onCartChanged);
     _notificationService.addListener(_onCartChanged);
-    _notificationService.initializeMockNotifications();
+    _notificationService.initialize();
   }
 
   @override

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import '../data/models/models.dart';
 
@@ -10,6 +12,8 @@ class CartService extends ChangeNotifier {
   CartService._internal();
 
   final List<CartItemModel> _cartItems = [];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   static const String _cartPrefsKey = 'cart_items';
 
   List<CartItemModel> get cartItems => List.unmodifiable(_cartItems);
@@ -22,9 +26,60 @@ class CartService extends ChangeNotifier {
   
   double get total => subtotal + deliveryFee;
 
-  /// Initialize - load saved cart
+  String? _currentUserId; // Track current user to detect changes
+  
+  /// Initialize - load saved cart from Firestore
   Future<void> initialize() async {
-    await _loadCart();
+    final user = _firebaseAuth.currentUser;
+    final userId = user?.uid;
+    
+    // If user changed, reset cart
+    if (_currentUserId != null && _currentUserId != userId) {
+      debugPrint('🟡 [CartService] User changed from $_currentUserId to $userId, resetting cart...');
+      _cartItems.clear();
+    }
+    
+    _currentUserId = userId;
+    
+    try {
+      await _loadCartFromFirestore();
+    } catch (e) {
+      debugPrint('🟡 [CartService] Firestore load failed, loading local: $e');
+      await _loadCart();
+    }
+  }
+  
+  /// Load cart from Firestore
+  Future<void> _loadCartFromFirestore() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      await _loadCart(); // Fallback to local
+      return;
+    }
+    
+    try {
+      final cartDoc = await _firestore.collection('carts').doc(user.uid).get();
+      if (cartDoc.exists && cartDoc.data() != null) {
+        final cartData = cartDoc.data()!;
+        final itemsJson = cartData['items'] as List<dynamic>? ?? [];
+        _cartItems.clear();
+        for (var itemJson in itemsJson) {
+          try {
+            final cartItem = _cartItemFromJson(itemJson as Map<String, dynamic>);
+            _cartItems.add(cartItem);
+          } catch (e) {
+            debugPrint('Error loading cart item from Firestore: $e');
+          }
+        }
+        notifyListeners();
+        debugPrint('✅ [CartService] Loaded ${_cartItems.length} items from Firestore');
+      } else {
+        await _loadCart(); // Fallback to local
+      }
+    } catch (e) {
+      debugPrint('🔴 [CartService] Error loading cart from Firestore: $e');
+      await _loadCart(); // Fallback to local
+    }
   }
 
   Future<void> _loadCart() async {
@@ -51,6 +106,21 @@ class CartService extends ChangeNotifier {
 
   Future<void> _saveCart() async {
     try {
+      // Save to Firestore if user is logged in
+      final user = _firebaseAuth.currentUser;
+      if (user != null) {
+        try {
+          await _firestore.collection('carts').doc(user.uid).set({
+            'items': _cartItems.map((item) => _cartItemToJson(item)).toList(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          debugPrint('✅ [CartService] Cart saved to Firestore');
+        } catch (e) {
+          debugPrint('🟡 [CartService] Failed to save cart to Firestore: $e');
+        }
+      }
+      
+      // Also save locally as backup
       final prefs = await SharedPreferences.getInstance();
       final cartJson = jsonEncode(
         _cartItems.map((item) => _cartItemToJson(item)).toList(),

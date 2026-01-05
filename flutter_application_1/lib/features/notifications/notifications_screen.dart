@@ -15,7 +15,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    _notificationService.initializeMockNotifications();
+    _notificationService.initialize();
     _notificationService.addListener(_onNotificationsChanged);
   }
 
@@ -129,6 +129,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     child: InkWell(
                       onTap: () {
                         _notificationService.markAsRead(notification.id);
+                        // Navigate to order tracking if it's an order notification
+                        if (notification.type == 'order' && notification.orderId != null) {
+                          Navigator.pushNamed(
+                            context,
+                            '/order-track',
+                            arguments: notification.orderId,
+                          );
+                        }
                       },
                       borderRadius: BorderRadius.circular(AppSizes.radiusL),
                       child: Padding(

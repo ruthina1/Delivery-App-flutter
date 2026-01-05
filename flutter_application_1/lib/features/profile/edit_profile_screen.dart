@@ -181,6 +181,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your name';
                   }
+                  if (value.trim().length < 2) {
+                    return 'Name must be at least 2 characters';
+                  }
+                  if (value.trim().length > 50) {
+                    return 'Name must be less than 50 characters';
+                  }
+                  // Check for valid name (letters and spaces only)
+                  if (!RegExp(r'^[a-zA-Z\s]+$').hasMatch(value.trim())) {
+                    return 'Name can only contain letters and spaces';
+                  }
                   return null;
                 },
               ),
@@ -196,8 +206,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your email';
                   }
-                  if (!value.contains('@')) {
-                    return 'Please enter a valid email';
+                  final trimmedValue = value.trim();
+                  // Email regex pattern
+                  final emailRegex = RegExp(
+                    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                  );
+                  if (!emailRegex.hasMatch(trimmedValue)) {
+                    return 'Please enter a valid email address';
+                  }
+                  if (trimmedValue.length > 100) {
+                    return 'Email must be less than 100 characters';
                   }
                   return null;
                 },
@@ -214,6 +232,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your phone number';
                   }
+                  final trimmedValue = value.trim();
+                  // Remove spaces, dashes, and plus signs for validation
+                  final cleanedValue = trimmedValue.replaceAll(RegExp(r'[\s\-+]'), '');
+                  
+                  // Check if it's all digits
+                  if (!RegExp(r'^\d+$').hasMatch(cleanedValue)) {
+                    return 'Phone number must contain only digits';
+                  }
+                  
+                  // Ethiopian phone number validation (9-15 digits)
+                  if (cleanedValue.length < 9 || cleanedValue.length > 15) {
+                    return 'Phone number must be between 9 and 15 digits';
+                  }
+                  
+                  // Check if it starts with valid Ethiopian mobile prefix
+                  if (cleanedValue.startsWith('251')) {
+                    // International format: 251XXXXXXXXX (should be 12 digits total)
+                    if (cleanedValue.length != 12) {
+                      return 'Invalid phone number format';
+                    }
+                    if (!['2519', '2517'].contains(cleanedValue.substring(0, 4))) {
+                      return 'Invalid Ethiopian mobile number';
+                    }
+                  } else if (cleanedValue.startsWith('0')) {
+                    // Local format: 09XXXXXXXXX (should be 10 digits)
+                    if (cleanedValue.length != 10) {
+                      return 'Invalid phone number format';
+                    }
+                  } else if (cleanedValue.startsWith('9') || cleanedValue.startsWith('7')) {
+                    // Local format without 0: 9XXXXXXXXX (should be 9 digits)
+                    if (cleanedValue.length != 9) {
+                      return 'Invalid phone number format';
+                    }
+                  } else {
+                    return 'Phone number must start with 0, 9, 7, or +251';
+                  }
+                  
                   return null;
                 },
               ),
@@ -266,6 +321,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppSizes.radiusM),
         borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusM),
+        borderSide: const BorderSide(color: AppColors.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppSizes.radiusM),
+        borderSide: const BorderSide(color: AppColors.error, width: 2),
       ),
     );
   }

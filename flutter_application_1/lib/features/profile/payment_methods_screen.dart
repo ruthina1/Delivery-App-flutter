@@ -9,7 +9,6 @@ class PaymentMethodsScreen extends StatelessWidget {
     final paymentMethods = [
       {'type': 'Cash on Delivery', 'icon': Icons.money, 'isDefault': true},
       {'type': 'Credit Card', 'icon': Icons.credit_card, 'isDefault': false},
-      {'type': 'Mobile Money', 'icon': Icons.phone_android, 'isDefault': false},
     ];
 
     return Scaffold(

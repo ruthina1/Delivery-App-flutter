@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'core/theme/theme.dart';
 import 'data/models/models.dart';
 import 'services/services.dart';
@@ -29,6 +31,17 @@ import 'features/profile/terms_conditions_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint('✅ Firebase initialized successfully');
+  } catch (e) {
+    debugPrint('🔴 Firebase initialization error: $e');
+    // Continue without Firebase if initialization fails
+  }
   
   // Initialize services
   await _initializeServices();
@@ -66,6 +79,12 @@ Future<void> _initializeServices() async {
   
   // Initialize order service
   await OrderService().initialize();
+  
+  // Initialize notification service
+  await NotificationService().initialize();
+  
+  // Initialize notification settings service
+  await NotificationSettingsService().initialize();
 }
 
 class BurgerKnightApp extends StatelessWidget {
@@ -96,7 +115,34 @@ class BurgerKnightApp extends StatelessWidget {
           case '/checkout':
             return _createRoute(const CheckoutScreen());
           case '/orders':
-            return _createRoute(const OrdersScreen());
+            debugPrint('🟢 [Main] Route /orders - Creating OrdersScreen');
+            debugPrint('🟢 [Main] Route /orders - About to instantiate OrdersScreen widget');
+            try {
+              final ordersScreen = const OrdersScreen();
+              debugPrint('🟢 [Main] Route /orders - OrdersScreen widget created successfully');
+              final route = _createRoute(ordersScreen);
+              debugPrint('🟢 [Main] Route /orders - Route created successfully');
+              return route;
+            } catch (e, stackTrace) {
+              debugPrint('🔴 [Main] ERROR creating OrdersScreen route: $e');
+              debugPrint('🔴 [Main] Stack trace: $stackTrace');
+              // Return error screen instead of crashing
+              return _createRoute(
+                Scaffold(
+                  appBar: AppBar(title: const Text('Error')),
+                  body: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error loading orders: $e'),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
           case '/product':
             if (settings.arguments is ProductModel) {
               final product = settings.arguments as ProductModel;

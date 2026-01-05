@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../core/constants/constants.dart';
 import '../../services/services.dart';
+import '../../services/notification_settings_service.dart';
+import '../../services/repository/data_repository.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,21 +14,93 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _authService = AuthService();
+  final _orderService = OrderService();
+  final _favoriteService = FavoriteService();
+  final _dataRepository = DataRepository();
+  final _notificationSettingsService = NotificationSettingsService();
+  
+  int _orderCount = 0;
+  int _addressCount = 0;
+  bool _isLoadingCounts = true;
 
   @override
   void initState() {
     super.initState();
     _authService.addListener(_onAuthChanged);
+    _orderService.addListener(_onOrdersChanged);
+    _favoriteService.addListener(_onFavoritesChanged);
+    _notificationSettingsService.addListener(_onSettingsChanged);
+    _loadCounts();
+    _notificationSettingsService.initialize();
   }
 
   @override
   void dispose() {
     _authService.removeListener(_onAuthChanged);
+    _orderService.removeListener(_onOrdersChanged);
+    _favoriteService.removeListener(_onFavoritesChanged);
+    _notificationSettingsService.removeListener(_onSettingsChanged);
     super.dispose();
   }
 
   void _onAuthChanged() {
     setState(() {});
+    _loadCounts();
+  }
+  
+  void _onOrdersChanged() {
+    _loadOrderCount();
+  }
+  
+  void _onFavoritesChanged() {
+    setState(() {});
+  }
+  
+  void _onSettingsChanged() {
+    setState(() {});
+  }
+  
+  Future<void> _loadCounts() async {
+    _loadOrderCount();
+    _loadAddressCount();
+  }
+  
+  Future<void> _loadOrderCount() async {
+    try {
+      final orders = await _orderService.getOrders();
+      if (mounted) {
+        setState(() {
+          _orderCount = orders.length;
+          _isLoadingCounts = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('🔴 [ProfileScreen] Error loading order count: $e');
+      if (mounted) {
+        setState(() {
+          _orderCount = 0;
+          _isLoadingCounts = false;
+        });
+      }
+    }
+  }
+  
+  Future<void> _loadAddressCount() async {
+    try {
+      final addresses = await _dataRepository.getAddresses();
+      if (mounted) {
+        setState(() {
+          _addressCount = addresses.length;
+        });
+      }
+    } catch (e) {
+      debugPrint('🔴 [ProfileScreen] Error loading address count: $e');
+      if (mounted) {
+        setState(() {
+          _addressCount = _dataRepository.cachedAddresses?.length ?? 0;
+        });
+      }
+    }
   }
 
   @override
@@ -205,17 +279,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
                 child: ListenableBuilder(
-                  listenable: FavoriteService(),
+                  listenable: Listenable.merge([
+                    _orderService,
+                    _favoriteService,
+                  ]),
                   builder: (context, child) {
-                    final favoriteService = FavoriteService();
                     return Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildStatItem('15', 'Orders'),
+                        _buildStatItem(
+                          _isLoadingCounts ? '...' : _orderCount.toString(),
+                          'Orders',
+                        ),
                         _buildDivider(),
-                        _buildStatItem(favoriteService.count.toString(), 'Favorites'),
+                        _buildStatItem(_favoriteService.count.toString(), 'Favorites'),
                         _buildDivider(),
-                        _buildStatItem('2', 'Addresses'),
+                        _buildStatItem(_addressCount.toString(), 'Addresses'),
                       ],
                     );
                   },
@@ -304,11 +383,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () {
                         Navigator.pushNamed(context, '/notifications');
                       },
-                      trailing: Switch(
-                        value: true,
-                        onChanged: (value) {},
-                        activeTrackColor: AppColors.primaryLight,
-                        activeColor: AppColors.primary,
+                      trailing: ListenableBuilder(
+                        listenable: _notificationSettingsService,
+                        builder: (context, child) {
+                          return Switch(
+                            value: _notificationSettingsService.notificationsEnabled,
+                            onChanged: (value) {
+                              _notificationSettingsService.setNotificationsEnabled(value);
+                            },
+                            activeTrackColor: AppColors.primaryLight,
+                            activeColor: AppColors.primary,
+                          );
+                        },
                       ),
                     ),
                     _buildMenuDivider(),

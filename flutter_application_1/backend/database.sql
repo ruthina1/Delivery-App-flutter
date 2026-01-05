@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   INDEX idx_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+select * from users;
 -- =====================================================
 -- CATEGORIES TABLE
 -- =====================================================
